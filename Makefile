@@ -9,7 +9,7 @@ folders:
 		@mkdir -p src include obj bin tmp
 bin/orchestrator: obj/orchestrator.o obj/utilities.o
 		$(CC) $(LDFLAGS) $^ -o $@
-bin/client: obj/client.o
+bin/client: obj/client.o obj/utilities.o
 		$(CC) $(LDFLAGS) $^ -o $@
 obj/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
