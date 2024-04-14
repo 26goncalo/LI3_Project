@@ -8,9 +8,12 @@ int main(int argc, char* argv[]){
     if(argc != 4) {               // ./orchestrator output_folder parallel-tasks sched-policy
         if(argc == 2){          //  ./orchestrator -help
             if(strcmp(argv[1],"-help") == 0){
-                //my_strcpy(command, "-help");
-                printf("teste\n"); // neste momento usado para debug
-                printf("Comando: %s\n",argv[1]);
+                printf("• Executar o servidor:\n\n"
+                        "\t$ ./orchestrator output_folder parallel-tasks sched-policy\n\n"
+                        "\tArgumentos:\n\n"
+                        "\t \t1. output-folder: pasta onde são guardados os ficheiros com o output de tarefas executadas.\n"
+                        "\t \t2. parallel-tasks: número de tarefas que podem ser executadas em paralelo.\n"
+                        "\t \t3. sched-policy: identificador da política de escalonamento, caso o servidor suporte várias políticas.\n");
                 return 0;
             }
             else{
