@@ -18,20 +18,22 @@ espera para execução, e terminadas.
 int main(int argc, char* argv[]){
     
     int client_to_server = open("client_to_server", O_WRONLY);
+
+    char buffer[1024];
+    int offset = 0;
     for (int i = 1; i < argc; i++) {
-        if (write(client_to_server, argv[i], strlen(argv[i])) == -1) {
-            perror("Erro na escrita para o pipe");
-            close(client_to_server);
-            return -1;
-        }
-        // Se não for o último argumento, escreve um espaço em branco
+        strcpy(buffer + offset, argv[i]);
+        offset += strlen(argv[i]);
+        // Adiciona um espaço se não for o último argumento
         if (i != (argc - 1)) {
-            if (write(client_to_server, " ", 1) == -1) {
-                perror("Erro na escrita para o pipe");
-                close(client_to_server);
-                return -1;
-            }
+            buffer[offset] = ' ';
+            offset++;
         }
+    }
+    if(write(client_to_server, buffer, offset) == -1){
+        perror("Erro na escrita para o pipe");
+        close(client_to_server);
+        return -1;
     }
     close(client_to_server);
 
