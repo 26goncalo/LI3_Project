@@ -14,56 +14,33 @@ espera para execução, e terminadas.
 */
 
 #include "../include/client.h"
-#include "../include/utilities.h"
 
 int main(int argc, char* argv[]){
-    if(argc < 2){
-        printf("Argumentos insuficientes\n");
-        return -1;
-    }
-    if(argc == 2){
-        if(strcmp(argv[1], "status") == 0){    // Interrogar programas em execução
-            //...
-            return 0;
+    
+    int client_to_server = open("client_to_server", O_WRONLY);
+    for (int i = 1; i < argc; i++) {
+        if (write(client_to_server, argv[i], strlen(argv[i])) == -1) {
+            perror("Erro na escrita para o pipe");
+            close(client_to_server);
+            return -1;
         }
-        if(strcmp(argv[1], "end") == 0){     //encerrar o server
-            int fd = open("server", O_WRONLY | O_APPEND);
-            if (write(fd, argv[1], strlen(argv[1])) == -1){
-                close(fd);
-                perror("Escrita para o server");
+        // Se não for o último argumento, escreve um espaço em branco
+        if (i != (argc - 1)) {
+            if (write(client_to_server, " ", 1) == -1) {
+                perror("Erro na escrita para o pipe");
+                close(client_to_server);
                 return -1;
             }
-            close(fd);
-            return 0;
         }
-        printf("Argumento inválido\n");
-        return -1;
     }
-    if(argc < 5){
-        printf("Argumentos insuficientes\n");
-        return -1;        
+    close(client_to_server);
+
+    int server_to_client = open("server_to_client", O_RDONLY);
+    int bytes_read = 0;
+    char buf[1000];
+    while((bytes_read = read(server_to_client, buf, 1000)) > 0){
+        write(1, buf, bytes_read);
     }
-    if(strcmp(argv[1], "execute") == 0){       //execute time -u "prog-a [args]"
-        int time = atoi(argv[2]);
-        char flag[2];   //"-u" ou "-p"
-        strcpy(flag, argv[3]);
-        if(strcmp(flag, "-u") == 0){   //vai guardar o nome do programa e os seus argumentos
-            int fd = open("server", O_WRONLY | O_APPEND);
-            if(write(fd, argv[4], strlen(argv[4])) == -1){
-                close(fd);
-                perror("Escrita para o server");
-                return -1;
-            }
-            close(fd);
-            return 0;
-        }
-        if(strcmp(flag, "-p") == 0){
-            //...
-            return 0;
-        }
-        printf("Flag inserida errada\n");
-        return -1;
-    }
-    printf("Argumentos inválidos\n");
-    return -1;
+    close(server_to_client);
+    return 0;
 }
