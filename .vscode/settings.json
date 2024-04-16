@@ -3,6 +3,7 @@
         "cliente.h": "c",
         "utilities.h": "c",
         "stat.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "client.h": "c"
     }
 }

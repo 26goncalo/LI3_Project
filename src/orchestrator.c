@@ -122,23 +122,25 @@ int main(int argc, char* argv[]){
                                 char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
                                 int NR_P = 0, nr_p = 0, nr_arg = 0;
                                 for(int j = 3; j<i; j++){
-                                    if(strcmp(args[j], "|") == 0){
+                                    // Se existirem mais argumentos para o mesmo programa
+                                    if(strcmp(args[j], "|") == 0){ 
                                         args_prog[nr_p][nr_arg] = NULL;
-                                        nr_p++;
-                                        NR_P++;
+                                        nr_p++; // incrementa o numero do programa atual
+                                        NR_P++; // incrementa o numero de programas Total
                                         nr_arg = 0;
                                     }
                                     else{
-                                        args_prog[nr_p][nr_arg] = strdup (args[j]);
+                                        args_prog[nr_p][nr_arg] = strdup (args[j]); // copiam-se os argumentos para a matriz
                                         nr_arg++;
                                     }
                                 }
                                 args_prog[nr_p][nr_arg] = NULL;
-                                nr_p++;
-                                NR_P++;
+                                nr_p++; // incrementa o numero do programa atual
+                                NR_P++; // incrementa o numero de programas Total
                                 nr_arg = 0;
 
                                 char message[20];
+                                // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
                                 sprintf(message, "\nTASK %d Received\n\n", nr_task);
                                 write(server_to_client, message, strlen(message));
                                 close(server_to_client);
@@ -154,7 +156,10 @@ int main(int argc, char* argv[]){
                                     new_task.id_task = nr_task;
                                     new_task.time = 0;
                                     new_task.status = SCHEDULED;
+                                    // Copia-se os argumentos do programa para a matriz
                                     copy_args_prog(new_task.args_prog, args_prog, NR_P);
+
+                                    // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
                                     task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
                                     task_array[nr_tasks] = new_task;
                                     printf("    agendou %d\n", nr_task);
