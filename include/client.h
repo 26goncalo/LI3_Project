@@ -7,3 +7,4 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <signal.h>
