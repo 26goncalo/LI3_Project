@@ -6,7 +6,7 @@
 #define RUNNING 1
 #define FINISHED 2
 
-int nr_tasks = 0;
+int nr_tasks = 0, nr_tasks_executing = 0;
 typedef struct task{
     int pid_son;
     int id_task;
@@ -23,7 +23,8 @@ void sigchld_handler(int signo) {
         for(int i = 0; i<nr_tasks; i++){
             if((task_array[i].pid_son == pid) && (task_array[i].status == RUNNING)){
                 task_array[i].status = FINISHED;
-                nr_tasks--;
+                printf(" %d terminado\n", i+1);
+                nr_tasks_executing--;
                 break;
             }
         }
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]){
         }
     }
 
-
+    int current_task = 0;
     char* output_folder = argv[1];
     int parallel_tasks = atoi(argv[2]);
     char* sched_policy = argv[3];      //Não sei como vai ser utilizado este argumento
@@ -156,10 +157,12 @@ int main(int argc, char* argv[]){
                                     copy_args_prog(new_task.args_prog, args_prog, NR_P);
                                     task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
                                     task_array[nr_tasks] = new_task;
+                                    printf("    agendou %d\n", nr_task);
 
-                                    if(nr_tasks < parallel_tasks){
+                                    if(nr_tasks_executing < parallel_tasks){
                                         int pid = fork();
                                         nr_tasks++;
+                                        nr_tasks_executing++;
 
                                         if(pid == -1){
                                             write(server_to_client, "Erro na criação do processo-filho\n", 37);
@@ -170,16 +173,19 @@ int main(int argc, char* argv[]){
                                             dup2(taskX, 1);
                                             dup2(taskX, STDERR_FILENO);
                                             close(taskX);
-                                            execvp(args_prog[0][0], args_prog[0]);
+                                            execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
                                             char error[50];
-                                            sprintf(error, "Erro no programa '%s'", args_prog[0][0]);
+                                            sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
                                             perror(error);
                                             _exit(255);
                                         }
                                         else{
+                                            //write(1, &current_task, sizeof(int));
+                                            //printf("%d\n", current_task);
                                             task_array[nr_tasks-1].pid_son = pid;
                                             //task_array[nr_tasks-1].id_task = nr_task;
                                             task_array[nr_tasks-1].status = RUNNING;
+                                            current_task++;
                                         }
                                     }
                                     // Obter o tempo de fim
