@@ -20,11 +20,14 @@ void sigchld_handler(int signo) {
     int status;
     pid_t pid; 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        struct timeval end_time;
+        gettimeofday(&end_time, NULL);
         for(int i = 0; i<nr_tasks; i++){
             if((task_array[i].pid_son == pid) && (task_array[i].status == RUNNING)){
                 task_array[i].status = FINISHED;
+                task_array[i].time = (end_time.tv_sec*1000000 + end_time.tv_usec) - task_array[i].time;
                 char task_completed[50];
-                sprintf(task_completed, "TASK %d was completed in 0 microseconds\n", task_array[i].id_task/*,microseconds*/);
+                sprintf(task_completed, "TASK %d was completed in %ld microseconds\n", task_array[i].id_task, task_array[i].time);
                 write(tasks, task_completed, strlen(task_completed));
                 nr_tasks_executing--;
                 break;
@@ -77,16 +80,13 @@ int main(int argc, char* argv[]){
         int nr_task = 1;
         char tasks_file[60];
         sprintf(tasks_file, "./%s/ALL_TASKS.txt", output_folder);
-        tasks = open(tasks_file, O_RDWR | O_CREAT | O_APPEND, 0666);
+        tasks = open(tasks_file, O_RDWR | O_CREAT | O_APPEND | O_TRUNC, 0666);
         signal(SIGCHLD, sigchld_handler);
         while(1){   
             int bytes_read = 0;
             char buf[1000];
             char* string = NULL;
             while((bytes_read = read(client_to_server, buf, 1000)) > 0){
-
-                //struct timeval start_time;
-                //gettimeofday(&start_time, NULL);
 
                 char* cmd = strdup_n(buf, bytes_read);  //copia para o cmd apenas a parte inicial do buffer que acabou de ser escrita pelo client
                 char* args[300];
@@ -148,10 +148,12 @@ int main(int argc, char* argv[]){
 
                             if(strcmp(args[2], "-u") == 0){  // "-u"
                                 
+                                struct timeval start_time;
+                                gettimeofday(&start_time, NULL);
                                 Task new_task;
                                 new_task.pid_son = 0;
                                 new_task.id_task = nr_task;
-                                new_task.time = 0;
+                                new_task.time = start_time.tv_sec*1000000 + start_time.tv_usec;  //para obter o tempo em microsegundos em que recebeu a tarefa
                                 new_task.status = SCHEDULED;
                                 // Copia-se os argumentos do programa para a matriz
                                 copy_args_prog(new_task.args_prog, args_prog, NR_P);
@@ -159,16 +161,8 @@ int main(int argc, char* argv[]){
                                 // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
                                 task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
                                 task_array[nr_tasks] = new_task;
-
-                                /////////////////////////////RETIREI DAQUI////////////////////
                                 nr_tasks_scheduled++;
                                 nr_tasks++;
-
-                                // Obter o tempo de fim
-                                // struct timeval end_time;
-                                // gettimeofday(&end_time, NULL);
-                                // long microseconds = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
-
                             }
 
                             else{   // "-p"
@@ -197,7 +191,7 @@ int main(int argc, char* argv[]){
                 if(nr_tasks_executing < parallel_tasks){
                     char taskX_file[60];
                     sprintf(taskX_file, "./%s/TASK%d.txt", output_folder, current_task +1);
-                    int taskX = open(taskX_file, O_RDWR | O_CREAT, 0666);
+                    int taskX = open(taskX_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
                     int pid = fork();
                     if(pid == -1){
                         int server_to_client = open("server_to_client", O_WRONLY);
