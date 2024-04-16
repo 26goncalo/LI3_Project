@@ -6,7 +6,7 @@
 #define RUNNING 1
 #define FINISHED 2
 
-int nr_tasks = 0, nr_tasks_executing = 0, tasks;
+int nr_tasks = 0, nr_tasks_executing = 0, tasks, nr_tasks_scheduled = 0;
 typedef struct task{
     int pid_son;
     int id_task;
@@ -26,7 +26,6 @@ void sigchld_handler(int signo) {
                 char task_completed[50];
                 sprintf(task_completed, "TASK %d was completed in 0 microseconds\n", task_array[i].id_task/*,microseconds*/);
                 write(tasks, task_completed, strlen(task_completed));
-                printf(" %d terminado\n", i+1);
                 nr_tasks_executing--;
                 break;
             }
@@ -84,149 +83,148 @@ int main(int argc, char* argv[]){
             int bytes_read = 0;
             char buf[1000];
             char* string = NULL;
-            //if(nr_tasks < parallel_tasks){
-                while((bytes_read = read(client_to_server, buf, 1000)) > 0){
+            while((bytes_read = read(client_to_server, buf, 1000)) > 0){
 
-                    //struct timeval start_time;
-                    //gettimeofday(&start_time, NULL);
+                //struct timeval start_time;
+                //gettimeofday(&start_time, NULL);
 
-                    char* cmd = strdup_n(buf, bytes_read);  //copia para o cmd apenas a parte inicial do buffer que acabou de ser escrita pelo client
-                    char* args[300];
-                    int i = 0;
-                    while((string = strsep(&cmd, " ")) != NULL){
-                        args[i] = string;
-                        i++;
+                char* cmd = strdup_n(buf, bytes_read);  //copia para o cmd apenas a parte inicial do buffer que acabou de ser escrita pelo client
+                char* args[300];
+                int i = 0;
+                while((string = strsep(&cmd, " ")) != NULL){
+                    args[i] = string;
+                    i++;
+                }
+                free(cmd);           
+
+                int server_to_client = open("server_to_client", O_WRONLY);            
+                if(i == 1){   // ./cliente status    ou      ./cliente end
+                    if(strcmp(args[0], "status") == 0){
+                        //...
                     }
-                    free(cmd);           
-
-                    int server_to_client = open("server_to_client", O_WRONLY);            
-                    if(i == 1){   // ./cliente status    ou      ./cliente end
-                        if(strcmp(args[0], "status") == 0){
-                            //...
-                        }
-                        else{ 
-                            if(strcmp(args[0], "end") == 0){
-                                close(client_to_server);
-                                close(server_to_client);
-                                unlink("client_to_server");
-                                unlink("server_to_client");
-                                return 0;
-                            }
-                            else{
-                                write(server_to_client, "Comando inválido\n", 18);
-                                close(server_to_client);
-                            }
-                        }
-                    }
-                    else{
-                        if(i > 3){  //  ./client execute time -u "prog-a [args]"
-                            if((strcmp(args[0], "execute") == 0)  &&  ((strcmp(args[2], "-u") == 0) || (strcmp(args[2], "-p") == 0))){
-
-                                char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
-                                int NR_P = 0, nr_p = 0, nr_arg = 0;
-                                for(int j = 3; j<i; j++){
-                                    // Se existirem mais argumentos para o mesmo programa
-                                    if(strcmp(args[j], "|") == 0){ 
-                                        args_prog[nr_p][nr_arg] = NULL;
-                                        nr_p++; // incrementa o numero do programa atual
-                                        NR_P++; // incrementa o numero de programas Total
-                                        nr_arg = 0;
-                                    }
-                                    else{
-                                        args_prog[nr_p][nr_arg] = strdup (args[j]); // copiam-se os argumentos para a matriz
-                                        nr_arg++;
-                                    }
-                                }
-                                args_prog[nr_p][nr_arg] = NULL;
-                                nr_p++; // incrementa o numero do programa atual
-                                NR_P++; // incrementa o numero de programas Total
-                                nr_arg = 0;
-
-                                char message[20];
-                                // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
-                                sprintf(message, "\nTASK %d Received\n\n", nr_task);
-                                write(server_to_client, message, strlen(message));
-                                close(server_to_client);
-
-                                char taskX_file[60];
-                                sprintf(taskX_file, "./%s/TASK%d.txt", output_folder, nr_task);
-                                int taskX = open(taskX_file, O_RDWR | O_CREAT, 0666);
-
-                                if(strcmp(args[2], "-u") == 0){  // "-u"
-                                    
-                                    Task new_task;
-                                    new_task.pid_son = 0;
-                                    new_task.id_task = nr_task;
-                                    new_task.time = 0;
-                                    new_task.status = SCHEDULED;
-                                    // Copia-se os argumentos do programa para a matriz
-                                    copy_args_prog(new_task.args_prog, args_prog, NR_P);
-
-                                    // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
-                                    task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
-                                    task_array[nr_tasks] = new_task;
-                                    printf("    agendou %d\n", nr_task);
-
-                                    if(nr_tasks_executing < parallel_tasks){
-                                        int pid = fork();
-                                        nr_tasks++;
-                                        nr_tasks_executing++;
-
-                                        if(pid == -1){
-                                            write(server_to_client, "Erro na criação do processo-filho\n", 37);
-                                            close(server_to_client);
-                                        }
-
-                                        if(pid == 0){ //processo-filho
-                                            dup2(taskX, 1);
-                                            dup2(taskX, STDERR_FILENO);
-                                            close(taskX);
-                                            execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
-                                            char error[50];
-                                            sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
-                                            perror(error);
-                                            _exit(255);
-                                        }
-                                        else{
-                                            //write(1, &current_task, sizeof(int));
-                                            //printf("%d\n", current_task);
-                                            task_array[nr_tasks-1].pid_son = pid;
-                                            //task_array[nr_tasks-1].id_task = nr_task;
-                                            task_array[nr_tasks-1].status = RUNNING;
-                                            current_task++;
-                                        }
-                                    }
-                                    // Obter o tempo de fim
-                                    // struct timeval end_time;
-                                    // gettimeofday(&end_time, NULL);
-                                    // long microseconds = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
-
-                                }
-
-                                else{   // "-p"
-                                    // ...
-                                }
-
-                                for(int nr_p = 0; nr_p<NR_P ; nr_p++){
-                                    for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
-                                        free(args_prog[nr_p][nr_arg]);
-                                    }
-                                }
-                                nr_task++;
-                                close(taskX);
-                            }
-                            else{
-                                write(server_to_client, "Comando inválido\n", 18);
-                                close(server_to_client); 
-                            }
+                    else{ 
+                        if(strcmp(args[0], "end") == 0){
+                            close(client_to_server);
+                            close(server_to_client);
+                            unlink("client_to_server");
+                            unlink("server_to_client");
+                            return 0;
                         }
                         else{
                             write(server_to_client, "Comando inválido\n", 18);
-                            close(server_to_client);  
+                            close(server_to_client);
                         }
                     }
                 }
-            //}
+                else{
+                    if(i > 3){  //  ./client execute time -u "prog-a [args]"
+                        if((strcmp(args[0], "execute") == 0)  &&  ((strcmp(args[2], "-u") == 0) || (strcmp(args[2], "-p") == 0))){
+
+                            char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
+                            int NR_P = 0, nr_p = 0, nr_arg = 0;
+                            for(int j = 3; j<i; j++){
+                                // Se existirem mais argumentos para o mesmo programa
+                                if(strcmp(args[j], "|") == 0){ 
+                                    args_prog[nr_p][nr_arg] = NULL;
+                                    nr_p++; // incrementa o numero do programa atual
+                                    NR_P++; // incrementa o numero de programas Total
+                                    nr_arg = 0;
+                                }
+                                else{
+                                    args_prog[nr_p][nr_arg] = strdup (args[j]); // copiam-se os argumentos para a matriz
+                                    nr_arg++;
+                                }
+                            }
+                            args_prog[nr_p][nr_arg] = NULL;
+                            nr_p++; // incrementa o numero do programa atual
+                            NR_P++; // incrementa o numero de programas Total
+                            nr_arg = 0;
+
+                            char message[20];
+                            // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
+                            sprintf(message, "\nTASK %d Received\n\n", nr_task);
+                            write(server_to_client, message, strlen(message));
+                            close(server_to_client);
+
+                            if(strcmp(args[2], "-u") == 0){  // "-u"
+                                
+                                Task new_task;
+                                new_task.pid_son = 0;
+                                new_task.id_task = nr_task;
+                                new_task.time = 0;
+                                new_task.status = SCHEDULED;
+                                // Copia-se os argumentos do programa para a matriz
+                                copy_args_prog(new_task.args_prog, args_prog, NR_P);
+
+                                // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
+                                task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
+                                task_array[nr_tasks] = new_task;
+
+                                /////////////////////////////RETIREI DAQUI////////////////////
+                                nr_tasks_scheduled++;
+                                nr_tasks++;
+
+                                // Obter o tempo de fim
+                                // struct timeval end_time;
+                                // gettimeofday(&end_time, NULL);
+                                // long microseconds = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
+
+                            }
+
+                            else{   // "-p"
+                                // ...
+                            }
+
+                            for(int nr_p = 0; nr_p<NR_P ; nr_p++){
+                                for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
+                                    free(args_prog[nr_p][nr_arg]);
+                                }
+                            }
+                            nr_task++;
+                        }
+                        else{
+                            write(server_to_client, "Comando inválido\n", 18);
+                            close(server_to_client); 
+                        }
+                    }
+                    else{
+                        write(server_to_client, "Comando inválido\n", 18);
+                        close(server_to_client);  
+                    }
+                }
+            }
+            if(nr_tasks_scheduled != 0){
+                if(nr_tasks_executing < parallel_tasks){
+                    char taskX_file[60];
+                    sprintf(taskX_file, "./%s/TASK%d.txt", output_folder, current_task +1);
+                    int taskX = open(taskX_file, O_RDWR | O_CREAT, 0666);
+                    int pid = fork();
+                    if(pid == -1){
+                        int server_to_client = open("server_to_client", O_WRONLY);
+                        write(server_to_client, "Erro na criação do processo-filho\n", 37);
+                        close(server_to_client);
+                    }
+
+                    if(pid == 0){ //processo-filho
+                        dup2(taskX, 1);
+                        dup2(taskX, STDERR_FILENO);
+                        close(taskX);
+                        execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
+                        char error[50];
+                        sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
+                        perror(error);
+                        _exit(255);
+                    }
+                    else{
+                        nr_tasks_executing++;
+                        nr_tasks_scheduled--;
+                        task_array[current_task].pid_son = pid;
+                        task_array[current_task].status = RUNNING;
+                        current_task++;
+                    }
+                    close(taskX);
+                }
+            }   
         }
         close(tasks);
     }
