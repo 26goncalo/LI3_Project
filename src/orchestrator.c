@@ -6,7 +6,7 @@
 #define RUNNING 1
 #define FINISHED 2
 
-int nr_tasks = 0, nr_tasks_executing = 0;
+int nr_tasks = 0, nr_tasks_executing = 0, tasks;
 typedef struct task{
     int pid_son;
     int id_task;
@@ -23,6 +23,9 @@ void sigchld_handler(int signo) {
         for(int i = 0; i<nr_tasks; i++){
             if((task_array[i].pid_son == pid) && (task_array[i].status == RUNNING)){
                 task_array[i].status = FINISHED;
+                char task_completed[50];
+                sprintf(task_completed, "TASK %d was completed in 0 microseconds\n", task_array[i].id_task/*,microseconds*/);
+                write(tasks, task_completed, strlen(task_completed));
                 printf(" %d terminado\n", i+1);
                 nr_tasks_executing--;
                 break;
@@ -75,7 +78,7 @@ int main(int argc, char* argv[]){
         int nr_task = 1;
         char tasks_file[60];
         sprintf(tasks_file, "./%s/ALL_TASKS.txt", output_folder);
-        int tasks = open(tasks_file, O_RDWR | O_CREAT | O_APPEND, 0666);
+        tasks = open(tasks_file, O_RDWR | O_CREAT | O_APPEND, 0666);
         signal(SIGCHLD, sigchld_handler);
         while(1){   
             int bytes_read = 0;
@@ -198,9 +201,6 @@ int main(int argc, char* argv[]){
                                     // gettimeofday(&end_time, NULL);
                                     // long microseconds = (end_time.tv_sec - start_time.tv_sec) * 1000000 + (end_time.tv_usec - start_time.tv_usec);
 
-                                    // char task_completed[50];
-                                    // sprintf(task_completed, "TASK %d was completed in %ld microseconds\n", nr_task, microseconds);
-                                    // write(tasks, task_completed, strlen(task_completed));
                                 }
 
                                 else{   // "-p"
