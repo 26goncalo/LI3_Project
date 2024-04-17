@@ -2,9 +2,9 @@
 #include "../include/utilities.h"
 
 #define COMMANDSIZE 100
-#define SCHEDULED 0
-#define RUNNING 1
-#define FINISHED 2
+#define EXECUTING 0
+#define SCHEDULED 1
+#define COMPLETED 2
 
 int nr_tasks = 0, nr_tasks_executing = 0, tasks, nr_tasks_scheduled = 0;
 typedef struct task{
@@ -13,6 +13,7 @@ typedef struct task{
     long time;
     int status;
     char* args_prog[20][20];
+    int nr_progs;
 } Task;
 Task *task_array = NULL;
 
@@ -23,11 +24,11 @@ void sigchld_handler(int signo) {
         struct timeval end_time;
         gettimeofday(&end_time, NULL);
         for(int i = 0; i<nr_tasks; i++){
-            if((task_array[i].pid_son == pid) && (task_array[i].status == RUNNING)){
-                task_array[i].status = FINISHED;
-                task_array[i].time = (end_time.tv_sec*1000000 + end_time.tv_usec) - task_array[i].time;
+            if((task_array[i].pid_son == pid) && (task_array[i].status == EXECUTING)){
+                task_array[i].status = COMPLETED;
+                task_array[i].time = (end_time.tv_sec * 1000) + (end_time.tv_usec / 1000) - task_array[i].time;
                 char task_completed[50];
-                sprintf(task_completed, "TASK %d was completed in %ld microseconds\n", task_array[i].id_task, task_array[i].time);
+                sprintf(task_completed, "TASK %d was completed in %ld milliseconds\n", task_array[i].id_task, task_array[i].time);
                 write(tasks, task_completed, strlen(task_completed));
                 nr_tasks_executing--;
                 break;
@@ -77,7 +78,7 @@ int main(int argc, char* argv[]){
         }
         mkdir(output_folder, 0777);
         int client_to_server = open("client_to_server", O_RDONLY);
-        int nr_task = 1;
+        int nr_task_received = 1;
         char tasks_file[60];
         sprintf(tasks_file, "./%s/ALL_TASKS.txt", output_folder);
         tasks = open(tasks_file, O_RDWR | O_CREAT | O_APPEND | O_TRUNC, 0666);
@@ -100,7 +101,44 @@ int main(int argc, char* argv[]){
                 int server_to_client = open("server_to_client", O_WRONLY);            
                 if(i == 1){   // ./cliente status    ou      ./cliente end
                     if(strcmp(args[0], "status") == 0){
-                        //...
+                        int pid = fork();
+                        if(pid == -1){
+                            close(server_to_client);
+                        }
+                        if(pid == 0){
+                            for(int i = 0; i<3; i++){
+                                if(i == 0) write(server_to_client, "Executing\n", 10);
+                                if(i == 1) write(server_to_client, "\nScheduled\n", 11);
+                                if(i == 2) write(server_to_client, "\nCompleted\n", 11);
+                                for(int j = 0; j<nr_tasks; j++){
+                                    if(task_array[j].status == i){
+                                        char output[300];
+                                        strcpy(output, "");
+                                        char progs[200];
+                                        strcpy(progs, "");
+                                        for(int k = 0; k<task_array[j].nr_progs; k++){
+                                            if(k!=0) strcat(progs, " | ");
+                                            strcat(progs, task_array[j].args_prog[k][0]);
+                                        }
+                                        char temp[250];
+                                        strcpy(temp, "");
+                                        sprintf(temp, "%d %s",task_array[j].id_task, progs);
+                                        strcat(output, temp);
+                                        if(i == 2){
+                                            sprintf(temp, " %ld ms",task_array[j].time);
+                                            strcat(output, temp);
+                                        }
+                                        strcat(output, "\n");
+                                        write(server_to_client, output, strlen(output));
+                                    }
+                                    // strcat(output, "\n");
+                                }
+                                // strcat(output, "\n");
+                            }
+                            close(server_to_client);
+                            _exit(0);
+                        }
+                        close(server_to_client);
                     }
                     else{ 
                         if(strcmp(args[0], "end") == 0){
@@ -142,7 +180,7 @@ int main(int argc, char* argv[]){
 
                             char message[20];
                             // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
-                            sprintf(message, "\nTASK %d Received\n\n", nr_task);
+                            sprintf(message, "\nTASK %d Received\n\n", nr_task_received);
                             write(server_to_client, message, strlen(message));
                             close(server_to_client);
 
@@ -152,8 +190,9 @@ int main(int argc, char* argv[]){
                                 gettimeofday(&start_time, NULL);
                                 Task new_task;
                                 new_task.pid_son = 0;
-                                new_task.id_task = nr_task;
-                                new_task.time = start_time.tv_sec*1000000 + start_time.tv_usec;  //para obter o tempo em microsegundos em que recebeu a tarefa
+                                new_task.id_task = nr_task_received;
+                                new_task.nr_progs = NR_P;
+                                new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
                                 new_task.status = SCHEDULED;
                                 // Copia-se os argumentos do programa para a matriz
                                 copy_args_prog(new_task.args_prog, args_prog, NR_P);
@@ -174,7 +213,7 @@ int main(int argc, char* argv[]){
                                     free(args_prog[nr_p][nr_arg]);
                                 }
                             }
-                            nr_task++;
+                            nr_task_received++;
                         }
                         else{
                             write(server_to_client, "Comando inválido\n", 18);
@@ -213,7 +252,7 @@ int main(int argc, char* argv[]){
                         nr_tasks_executing++;
                         nr_tasks_scheduled--;
                         task_array[current_task].pid_son = pid;
-                        task_array[current_task].status = RUNNING;
+                        task_array[current_task].status = EXECUTING;
                         current_task++;
                     }
                     close(taskX);
