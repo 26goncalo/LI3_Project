@@ -12,6 +12,7 @@ typedef struct task{
     int id_task;
     long time;
     int status;
+    int expected_time;
     char* args_prog[20][20];
     int nr_progs;
 } Task;
@@ -67,7 +68,7 @@ int main(int argc, char* argv[]){
     char* output_folder = argv[1];
     int parallel_tasks = atoi(argv[2]);
     char* sched_policy = argv[3];      //Não sei como vai ser utilizado este argumento
-    if(strcmp(sched_policy, "FIFO") == 0){
+    if(strcmp(sched_policy, "FCFS") == 0 || strcmp(sched_policy, "SJF") == 0){
         if(mkfifo("client_to_server",0666) == -1){   // ligar o pipe com nome do cliente para o servidor
             perror("Erro ao criar pipe com nome");
             return -1;
@@ -160,6 +161,8 @@ int main(int argc, char* argv[]){
 
                             char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
                             int NR_P = 0, nr_p = 0, nr_arg = 0;
+                            int expected_time = atoi(args[1]);
+                            write (1, args[1], strlen(args[1]));
                             for(int j = 3; j<i; j++){
                                 // Se existirem mais argumentos para o mesmo programa
                                 if(strcmp(args[j], "|") == 0){ 
@@ -192,6 +195,7 @@ int main(int argc, char* argv[]){
                                 new_task.pid_son = 0;
                                 new_task.id_task = nr_task_received;
                                 new_task.nr_progs = NR_P;
+                                new_task.expected_time = expected_time;
                                 new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
                                 new_task.status = SCHEDULED;
                                 // Copia-se os argumentos do programa para a matriz
@@ -199,7 +203,23 @@ int main(int argc, char* argv[]){
 
                                 // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
                                 task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
-                                task_array[nr_tasks] = new_task;
+
+                                if(strcmp(sched_policy, "FCFS") == 0) {
+                                    task_array[nr_tasks] = new_task;
+                                }
+                                else {  // SJF
+                                    for (int i = current_task; i < nr_tasks + 1; i++) {
+                                        if (new_task.expected_time < task_array[i].expected_time) {
+                                            Task aux = new_task;
+                                            for (int j = i; j < nr_tasks + 1; j++) {
+                                                Task aux2 = task_array[j];
+                                                task_array[j] = aux;
+                                                aux = aux2;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
                                 nr_tasks_scheduled++;
                                 nr_tasks++;
                             }
@@ -208,7 +228,7 @@ int main(int argc, char* argv[]){
                                 // ...
                             }
 
-                            for(int nr_p = 0; nr_p<NR_P ; nr_p++){
+                            for(int nr_p = 0; nr_p<NR_P; nr_p++){
                                 for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
                                     free(args_prog[nr_p][nr_arg]);
                                 }
