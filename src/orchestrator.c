@@ -132,9 +132,7 @@ int main(int argc, char* argv[]){
                                         strcat(output, "\n");
                                         write(server_to_client, output, strlen(output));
                                     }
-                                    // strcat(output, "\n");
                                 }
-                                // strcat(output, "\n");
                             }
                             close(server_to_client);
                             _exit(0);
@@ -162,7 +160,6 @@ int main(int argc, char* argv[]){
                             char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
                             int NR_P = 0, nr_p = 0, nr_arg = 0;
                             int expected_time = atoi(args[1]);
-                            write (1, args[1], strlen(args[1]));
                             for(int j = 3; j<i; j++){
                                 // Se existirem mais argumentos para o mesmo programa
                                 if(strcmp(args[j], "|") == 0){ 
@@ -208,15 +205,30 @@ int main(int argc, char* argv[]){
                                     task_array[nr_tasks] = new_task;
                                 }
                                 else {  // SJF
-                                    for (int i = current_task; i < nr_tasks + 1; i++) {
-                                        if (new_task.expected_time < task_array[i].expected_time) {
-                                            Task aux = new_task;
-                                            for (int j = i; j < nr_tasks + 1; j++) {
-                                                Task aux2 = task_array[j];
-                                                task_array[j] = aux;
-                                                aux = aux2;
+                                    if(nr_tasks == 0){
+                                        task_array[0] = new_task;
+                                    }
+                                    else{
+                                        if(current_task == nr_tasks){
+                                            task_array[nr_tasks] = new_task;
+                                        }
+                                        else{
+                                            for(int i = current_task; i<=nr_tasks; i++){
+                                                if(i == nr_tasks){
+                                                    task_array[nr_tasks] = new_task;
+                                                    break;
+                                                }
+                                                if(new_task.expected_time < task_array[i].expected_time){
+                                                    Task temp = new_task;
+                                                    for(int j = i; j<nr_tasks; j++){
+                                                        Task temp2 = task_array[j];
+                                                        task_array[j] = temp;
+                                                        temp = temp2;
+                                                        if(j == nr_tasks-1) task_array[j+1] = temp;
+                                                    }
+                                                    break;
+                                                }
                                             }
-                                            break;
                                         }
                                     }
                                 }
@@ -249,7 +261,7 @@ int main(int argc, char* argv[]){
             if(nr_tasks_scheduled != 0){
                 if(nr_tasks_executing < parallel_tasks){
                     char taskX_file[60];
-                    sprintf(taskX_file, "./%s/TASK%d.txt", output_folder, current_task +1);
+                    sprintf(taskX_file, "./%s/TASK%d.txt", output_folder, task_array[current_task].id_task);
                     int taskX = open(taskX_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
                     int pid = fork();
                     if(pid == -1){
