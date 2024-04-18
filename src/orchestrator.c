@@ -141,6 +141,14 @@ int main(int argc, char* argv[]){
                     }
                     else{ 
                         if(strcmp(args[0], "end") == 0){
+                            //liberta a memória alocada para guardar os argumentos das tarefas no array de tarefas
+                            for(int i = 0; i<nr_tasks; i++){
+                                for(int j = 0; j<task_array[i].nr_progs; j++){
+                                    for(int k = 0; k<20 && task_array[i].args_prog[j][k]!=NULL; k++){
+                                        free(task_array[i].args_prog[j][k]);
+                                    }
+                                }
+                            }
                             close(client_to_server);
                             close(server_to_client);
                             unlink("client_to_server");
