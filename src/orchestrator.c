@@ -88,10 +88,10 @@ int main(int argc, char* argv[]){
             int bytes_read = 0;
             char buf[1000];
             char* string = NULL;
+            char* args[300];
             while((bytes_read = read(client_to_server, buf, 1000)) > 0){
-
+                args[300] = NULL;
                 char* cmd = strdup_n(buf, bytes_read);  //copia para o cmd apenas a parte inicial do buffer que acabou de ser escrita pelo client
-                char* args[300];
                 int i = 0;
                 while((string = strsep(&cmd, " ")) != NULL){
                     args[i] = string;
@@ -192,61 +192,53 @@ int main(int argc, char* argv[]){
                             write(server_to_client, message, strlen(message));
                             close(server_to_client);
 
-                            if(strcmp(args[2], "-u") == 0){  // "-u"
-                                
-                                struct timeval start_time;
-                                gettimeofday(&start_time, NULL);
-                                Task new_task;
-                                new_task.pid_son = 0;
-                                new_task.id_task = nr_task_received;
-                                new_task.nr_progs = NR_P;
-                                new_task.expected_time = expected_time;
-                                new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
-                                new_task.status = SCHEDULED;
-                                // Copia-se os argumentos do programa para a matriz
-                                copy_args_prog(new_task.args_prog, args_prog, NR_P);
+                            struct timeval start_time;
+                            gettimeofday(&start_time, NULL);
+                            Task new_task;
+                            new_task.pid_son = 0;
+                            new_task.id_task = nr_task_received;
+                            new_task.nr_progs = NR_P;
+                            new_task.expected_time = expected_time;
+                            new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
+                            new_task.status = SCHEDULED;
+                            // Copia-se os argumentos do programa para a matriz
+                            copy_args_prog(new_task.args_prog, args_prog, NR_P);
+                            // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
+                            task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
 
-                                // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
-                                task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
-
-                                if(strcmp(sched_policy, "FCFS") == 0) {
-                                    task_array[nr_tasks] = new_task;
+                            if(strcmp(sched_policy, "FCFS") == 0) {
+                                task_array[nr_tasks] = new_task;
+                            }
+                            else {  // SJF
+                                if(nr_tasks == 0){
+                                    task_array[0] = new_task;
                                 }
-                                else {  // SJF
-                                    if(nr_tasks == 0){
-                                        task_array[0] = new_task;
+                                else{
+                                    if(current_task == nr_tasks){
+                                        task_array[nr_tasks] = new_task;
                                     }
                                     else{
-                                        if(current_task == nr_tasks){
-                                            task_array[nr_tasks] = new_task;
-                                        }
-                                        else{
-                                            for(int i = current_task; i<=nr_tasks; i++){
-                                                if(i == nr_tasks){
-                                                    task_array[nr_tasks] = new_task;
-                                                    break;
+                                        for(int i = current_task; i<=nr_tasks; i++){
+                                            if(i == nr_tasks){
+                                                task_array[nr_tasks] = new_task;
+                                                break;
+                                            }
+                                            if(new_task.expected_time < task_array[i].expected_time){
+                                                Task temp = new_task;
+                                                for(int j = i; j<nr_tasks; j++){
+                                                    Task temp2 = task_array[j];
+                                                    task_array[j] = temp;
+                                                    temp = temp2;
+                                                    if(j == nr_tasks-1) task_array[j+1] = temp;
                                                 }
-                                                if(new_task.expected_time < task_array[i].expected_time){
-                                                    Task temp = new_task;
-                                                    for(int j = i; j<nr_tasks; j++){
-                                                        Task temp2 = task_array[j];
-                                                        task_array[j] = temp;
-                                                        temp = temp2;
-                                                        if(j == nr_tasks-1) task_array[j+1] = temp;
-                                                    }
-                                                    break;
-                                                }
+                                                break;
                                             }
                                         }
                                     }
                                 }
-                                nr_tasks_scheduled++;
-                                nr_tasks++;
                             }
-
-                            else{   // "-p"
-                                // ...
-                            }
+                            nr_tasks_scheduled++;
+                            nr_tasks++;
 
                             for(int nr_p = 0; nr_p<NR_P; nr_p++){
                                 for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
@@ -279,14 +271,72 @@ int main(int argc, char* argv[]){
                     }
 
                     if(pid == 0){ //processo-filho
-                        dup2(taskX, 1);
-                        dup2(taskX, STDERR_FILENO);
-                        close(taskX);
-                        execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
-                        char error[50];
-                        sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
-                        perror(error);
-                        _exit(255);
+                        if(strcmp(args[2], "-u") == 0){
+                            dup2(taskX, 1);
+                            dup2(taskX, STDERR_FILENO);
+                            close(taskX);
+                            execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
+                            char error[50];
+                            sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
+                            perror(error);
+                            _exit(255);
+                        }
+                        if(strcmp(args[2], "-p") == 0){
+                            int nr_progs = task_array[current_task].nr_progs;
+                            int pd[nr_progs - 1][2];
+                            if(pipe(pd[0]) == -1){
+                                    perror("Erro na criação de pipes anónimos");
+                                    _exit(255);
+                            }
+                            int pid_filho2 = fork();
+                            if(pid_filho2 == -1) perror("Erro na criação do filho");
+                            else{
+                                if(pid_filho2 == 0){
+                                    close(pd[0][0]);
+                                    dup2(pd[0][1], 1);
+                                    close(pd[0][1]);
+                                    execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
+                                    perror("Erro no exec");
+                                    _exit(255);
+                                }
+                                else{
+                                    for(int i = 1; i<nr_progs - 1; i++){
+                                        if(pipe(pd[i]) == -1){
+                                            perror("Erro na criação de pipes anónimos");
+                                            _exit(255);
+                                        }
+                                        int pid_filho3 = fork();
+                                        if(pid_filho3 == -1) perror("Erro na criação do filho");
+                                        if(pid_filho3 == 0){
+                                            close(pd[i-1][1]);
+                                            dup2(pd[i-1][0], 0);
+                                            close(pd[i-1][0]);
+                                            close(pd[i][0]);
+                                            dup2(pd[i][1], 1);
+                                            close(pd[i][1]);
+                                            execvp(task_array[current_task].args_prog[i][0], task_array[current_task].args_prog[i]);
+                                            perror("Erro no exec");
+                                            _exit(255);
+                                        }
+                                    }
+                                    int pid_filho4 = fork();
+                                    if(pid_filho4 == -1) perror("Erro na criação do filho");
+                                    if(pid_filho4 == 0){
+                                        close(pd[nr_progs-2][1]);
+                                        dup2(pd[nr_progs-2][0], 0);
+                                        close(pd[nr_progs-2][0]);
+                                        dup2(taskX, 1);
+                                        dup2(taskX, STDERR_FILENO);
+                                        close(taskX);
+                                        execvp(task_array[current_task].args_prog[nr_progs-1][0], task_array[current_task].args_prog[nr_progs-1]);
+                                        perror("Erro no exec");
+                                        _exit(255);
+                                    }
+                                    _exit(0);
+                                }
+                            }
+                        }
+                        _exit(0);
                     }
                     else{
                         nr_tasks_executing++;
