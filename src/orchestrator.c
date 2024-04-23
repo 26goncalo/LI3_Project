@@ -295,6 +295,8 @@ int main(int argc, char* argv[]){
                                     close(pd[0][0]);
                                     dup2(pd[0][1], 1);
                                     close(pd[0][1]);
+                                    dup2(taskX, STDERR_FILENO);
+                                    close(taskX);
                                     execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
                                     perror("Erro no exec");
                                     _exit(255);
@@ -314,6 +316,8 @@ int main(int argc, char* argv[]){
                                             close(pd[i][0]);
                                             dup2(pd[i][1], 1);
                                             close(pd[i][1]);
+                                            dup2(taskX,STDERR_FILENO);
+                                            close(taskX);
                                             execvp(task_array[current_task].args_prog[i][0], task_array[current_task].args_prog[i]);
                                             perror("Erro no exec");
                                             _exit(255);
