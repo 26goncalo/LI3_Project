@@ -298,16 +298,21 @@ int main(int argc, char* argv[]){
                                     dup2(taskX, STDERR_FILENO);
                                     close(taskX);
                                     execvp(task_array[current_task].args_prog[0][0], task_array[current_task].args_prog[0]);
-                                    perror("Erro no exec");
+                                    char error[50];
+                                    sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[0][0]);
+                                    perror(error);
                                     _exit(255);
                                 }
                                 else{
+                                    int status, pid_filho3;
                                     for(int i = 1; i<nr_progs - 1; i++){
                                         if(pipe(pd[i]) == -1){
                                             perror("Erro na criação de pipes anónimos");
                                             _exit(255);
                                         }
-                                        int pid_filho3 = fork();
+                                        if(i == 1) waitpid(pid_filho2, &status, 0);
+                                        else waitpid(pid_filho3, &status, 0);
+                                        pid_filho3 = fork();
                                         if(pid_filho3 == -1) perror("Erro na criação do filho");
                                         if(pid_filho3 == 0){
                                             close(pd[i-1][1]);
@@ -319,10 +324,16 @@ int main(int argc, char* argv[]){
                                             dup2(taskX,STDERR_FILENO);
                                             close(taskX);
                                             execvp(task_array[current_task].args_prog[i][0], task_array[current_task].args_prog[i]);
-                                            perror("Erro no exec");
+                                            char error[50];
+                                            sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[i][0]);
+                                            perror(error);
                                             _exit(255);
                                         }
+                                        close(pd[i-1][1]);
+                                        close(pd[i-1][0]);
                                     }
+                                    if(nr_progs == 2) waitpid(pid_filho2, &status, 0);
+                                    else waitpid(pid_filho3, &status, 0);
                                     int pid_filho4 = fork();
                                     if(pid_filho4 == -1) perror("Erro na criação do filho");
                                     if(pid_filho4 == 0){
@@ -333,14 +344,20 @@ int main(int argc, char* argv[]){
                                         dup2(taskX, STDERR_FILENO);
                                         close(taskX);
                                         execvp(task_array[current_task].args_prog[nr_progs-1][0], task_array[current_task].args_prog[nr_progs-1]);
-                                        perror("Erro no exec");
+                                        char error[50];
+                                        sprintf(error, "Erro no programa '%s'", task_array[current_task].args_prog[nr_progs-1][0]);
+                                        perror(error);
                                         _exit(255);
                                     }
+                                    close(pd[nr_progs-2][0]);
+                                    close(pd[nr_progs-2][1]);
+                                    int status2;
+                                    waitpid(pid_filho4, &status2, 0);
                                     _exit(0);
                                 }
                             }
                         }
-                        _exit(0);
+                        _exit(0);    //inútil????
                     }
                     else{
                         nr_tasks_executing++;
@@ -348,8 +365,8 @@ int main(int argc, char* argv[]){
                         task_array[current_task].pid_son = pid;
                         task_array[current_task].status = EXECUTING;
                         current_task++;
-                    }
                     close(taskX);
+                    }
                 }
             }   
         }
