@@ -14,6 +14,7 @@ typedef struct task{
     int status;
     int expected_time;
     char* args_prog[20][20];
+    char* flag;   //u ou p
     int nr_progs;
 } Task;
 Task *task_array = NULL;
@@ -148,6 +149,7 @@ int main(int argc, char* argv[]){
                                         free(task_array[i].args_prog[j][k]);
                                     }
                                 }
+                                free(task_array[i].flag);
                             }
                             close(client_to_server);
                             close(server_to_client);
@@ -201,6 +203,7 @@ int main(int argc, char* argv[]){
                             new_task.expected_time = expected_time;
                             new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
                             new_task.status = SCHEDULED;
+                            new_task.flag = strdup(args[2]);
                             // Copia-se os argumentos do programa para a matriz
                             copy_args_prog(new_task.args_prog, args_prog, NR_P);
                             // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
@@ -271,7 +274,7 @@ int main(int argc, char* argv[]){
                     }
 
                     if(pid == 0){ //processo-filho
-                        if(strcmp(args[2], "-u") == 0){
+                        if(strcmp(task_array[current_task].flag, "-u") == 0){
                             dup2(taskX, 1);
                             dup2(taskX, STDERR_FILENO);
                             close(taskX);
@@ -281,7 +284,7 @@ int main(int argc, char* argv[]){
                             perror(error);
                             _exit(255);
                         }
-                        if(strcmp(args[2], "-p") == 0){
+                        if(strcmp(task_array[current_task].flag, "-p") == 0){
                             int nr_progs = task_array[current_task].nr_progs;
                             int pd[nr_progs - 1][2];
                             if(pipe(pd[0]) == -1){
@@ -360,12 +363,12 @@ int main(int argc, char* argv[]){
                         _exit(0);    //inútil????
                     }
                     else{
+                        close(taskX);
                         nr_tasks_executing++;
                         nr_tasks_scheduled--;
                         task_array[current_task].pid_son = pid;
                         task_array[current_task].status = EXECUTING;
                         current_task++;
-                    close(taskX);
                     }
                 }
             }   
