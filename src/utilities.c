@@ -1,5 +1,5 @@
 /*
-    Neste módulo vão ser definidas funções auxiliares à resolução do projet
+    Neste módulo vão ser definidas funções auxiliares à resolução do projeto
 */
 
 #include "../include/utilities.h"

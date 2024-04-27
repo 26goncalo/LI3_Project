@@ -1,12 +1,13 @@
 #include "../include/client.h"
 #include "../include/utilities.h"
 
-#define COMMANDSIZE 100
 #define EXECUTING 0
 #define SCHEDULED 1
 #define COMPLETED 2
 
-int nr_tasks = 0, nr_tasks_executing = 0, tasks, nr_tasks_scheduled = 0;
+int nr_tasks = 0, nr_tasks_executing = 0, tasks, nr_tasks_scheduled = 0, current_task = 0, tasks_completed_file;
+char* output_folder;
+char tasks_completed[60];
 typedef struct task{
     int pid_son;
     int id_task;
@@ -27,12 +28,67 @@ void sigchld_handler(int signo) {
         gettimeofday(&end_time, NULL);
         for(int i = 0; i<nr_tasks; i++){
             if((task_array[i].pid_son == pid) && (task_array[i].status == EXECUTING)){
-                task_array[i].status = COMPLETED;
                 task_array[i].time = (end_time.tv_sec * 1000) + (end_time.tv_usec / 1000) - task_array[i].time;
+                task_array[i].status = COMPLETED;
+                //meter essa tarefa num ficheiro de tarefas completas
+                tasks_completed[60] = '\0';
+                sprintf(tasks_completed, "./%s/TASKS_COMPLETED.txt", output_folder);
+                tasks_completed_file = open(tasks_completed, O_RDWR | O_CREAT | O_APPEND, 0666);
+                char output[300];
+                strcpy(output, "");
+                char progs[200];
+                strcpy(progs, "");
+                for(int k = 0; k<task_array[i].nr_progs; k++){
+                    if(k!=0) strcat(progs, " | ");
+                    strcat(progs, task_array[i].args_prog[k][0]);
+                }
+                char temp[250];
+                strcpy(temp, "");
+                sprintf(temp, "%d %s",task_array[i].id_task, progs);
+                strcat(output, temp);
+                if(i == 2){
+                    sprintf(temp, " %ld ms",task_array[i].time);
+                    strcat(output, temp);
+                }
+                strcat(output, "\n");
+                write(tasks_completed_file, output, strlen(output));
+                close(tasks_completed_file);
+
+                for(int j = 0; j<task_array[i].nr_progs; j++){
+                    for(int k = 0; k<20 && task_array[i].args_prog[j][k]!=NULL; k++){
+                        free(task_array[i].args_prog[j][k]);
+                    }
+                }
+                free(task_array[i].flag);
                 char task_completed[50];
                 sprintf(task_completed, "TASK %d was completed in %ld milliseconds\n", task_array[i].id_task, task_array[i].time);
                 write(tasks, task_completed, strlen(task_completed));
+                //rearranjar o array para deixar de ter esta tarefa completa
+                for (int j = i; j < nr_tasks - 1; j++) {
+                    task_array[j] = task_array[j + 1];
+                }
+                for(int j = 0; j<task_array[nr_tasks-1].nr_progs; j++){
+                    for(int k = 0; k<20 && task_array[nr_tasks-1].args_prog[j][k]!=NULL; k++){
+                        free(task_array[nr_tasks-1].args_prog[j][k]);
+                    }
+                }
+                free(task_array[nr_tasks-1].flag);
+                if(nr_tasks!=1) free(&task_array[nr_tasks-1]);
+
+                Task *temp2 = realloc(task_array, (nr_tasks - 1) * sizeof(Task));
+                task_array = temp2;
+                nr_tasks--;
                 nr_tasks_executing--;
+                current_task--;
+                if(nr_tasks==0){
+                    free(task_array);
+                    task_array = NULL;
+                }
+
+                // Reduz o tamanho do array
+                //nr_tasks--;
+                //nr_tasks_executing--;
+                //current_task--;
                 break;
             }
         }
@@ -65,10 +121,10 @@ int main(int argc, char* argv[]){
         }
     }
 
-    int current_task = 0;
-    char* output_folder = argv[1];
+    current_task = 0;
+    output_folder = argv[1];
     int parallel_tasks = atoi(argv[2]);
-    char* sched_policy = argv[3];      //Não sei como vai ser utilizado este argumento
+    char* sched_policy = argv[3];
     if(strcmp(sched_policy, "FCFS") == 0 || strcmp(sched_policy, "SJF") == 0){
         if(mkfifo("client_to_server",0666) == -1){   // ligar o pipe com nome do cliente para o servidor
             perror("Erro ao criar pipe com nome");
@@ -92,13 +148,14 @@ int main(int argc, char* argv[]){
             char* args[300];
             while((bytes_read = read(client_to_server, buf, 1000)) > 0){
                 args[300] = NULL;
-                char* cmd = strdup_n(buf, bytes_read);  //copia para o cmd apenas a parte inicial do buffer que acabou de ser escrita pelo client
+                char* cmd_copy = strdup_n(buf, bytes_read);
+                char* cmd = cmd_copy;
                 int i = 0;
                 while((string = strsep(&cmd, " ")) != NULL){
                     args[i] = string;
                     i++;
                 }
-                free(cmd);           
+                args[i] = NULL;
 
                 int server_to_client = open("server_to_client", O_WRONLY);            
                 if(i == 1){   // ./cliente status    ou      ./cliente end
@@ -111,7 +168,18 @@ int main(int argc, char* argv[]){
                             for(int i = 0; i<3; i++){
                                 if(i == 0) write(server_to_client, "Executing\n", 10);
                                 if(i == 1) write(server_to_client, "\nScheduled\n", 11);
-                                if(i == 2) write(server_to_client, "\nCompleted\n", 11);
+                                if(i == 2){
+                                    write(server_to_client, "\nCompleted\n", 11);
+                                    //copiar as tarefas que estão no ficheiro de tarefas completas
+                                    char buffer[1000];
+                                    bytes_read = 0;
+                                    tasks_completed_file = open(tasks_completed, O_RDWR | O_CREAT | O_APPEND, 0666);
+                                    while((bytes_read = read(tasks_completed_file, buffer, 1000)) > 0){
+                                        write(server_to_client, buffer, bytes_read);
+                                    }
+                                    close(tasks_completed_file);
+                                    break;
+                                }
                                 for(int j = 0; j<nr_tasks; j++){
                                     if(task_array[j].status == i){
                                         char output[300];
@@ -151,6 +219,8 @@ int main(int argc, char* argv[]){
                                 }
                                 free(task_array[i].flag);
                             }
+                            free(task_array);
+                            free(cmd_copy);
                             close(client_to_server);
                             close(server_to_client);
                             unlink("client_to_server");
@@ -165,6 +235,7 @@ int main(int argc, char* argv[]){
                 }
                 else{
                     if(i > 3){  //  ./client execute time -u "prog-a [args]"
+                    //printf("%s   %s\n", args[0], args[2]);
                         if((strcmp(args[0], "execute") == 0)  &&  ((strcmp(args[2], "-u") == 0) || (strcmp(args[2], "-p") == 0))){
 
                             char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
@@ -207,6 +278,7 @@ int main(int argc, char* argv[]){
                             // Copia-se os argumentos do programa para a matriz
                             copy_args_prog(new_task.args_prog, args_prog, NR_P);
                             // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
+                            
                             task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
 
                             if(strcmp(sched_policy, "FCFS") == 0) {
@@ -260,6 +332,7 @@ int main(int argc, char* argv[]){
                         close(server_to_client);  
                     }
                 }
+                free(cmd_copy);
             }
             if(nr_tasks_scheduled != 0){
                 if(nr_tasks_executing < parallel_tasks){
