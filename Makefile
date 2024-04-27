@@ -1,7 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -g -Iinclude
 LDFLAGS =
-all: folders orchestrator client
+SCRIPT = pscript.sh
+all: folders orchestrator client copy_script
 
 orchestrator: bin/orchestrator
 client: bin/client
@@ -13,6 +14,10 @@ bin/client: obj/client.o obj/utilities.o
 		$(CC) $(LDFLAGS) $^ -o $@
 obj/%.o: src/%.c
 		$(CC) $(CFLAGS) -c $< -o $@
+copy_script:
+	@cp $(SCRIPT) bin/$(SCRIPT)
+	@chmod +x bin/$(SCRIPT)
+
 clean:
 		rm -rf obj tmp bin
 
@@ -40,6 +45,6 @@ clean:
 # 	$(CC) $(CFLAGS) -c $< -o $@
 # 	$(CC) $(CFLAGS) -c $<	
 # valgrind: bin/orchestrator bin/client
-# 	$(VALGRIND) $(VALGRIND_OPTS) bin/orchestrator pasta 2 SJF
+# 	$(VALGRIND) $(VALGRIND_OPTS) bin/orchestrator pasta 1 FCFS
 # clean:
 # 	rm -rf obj tmp bin

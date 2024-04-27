@@ -53,7 +53,6 @@ void sigchld_handler(int signo) {
                 strcat(output, "\n");
                 write(tasks_completed_file, output, strlen(output));
                 close(tasks_completed_file);
-
                 for(int j = 0; j<task_array[i].nr_progs; j++){
                     for(int k = 0; k<20 && task_array[i].args_prog[j][k]!=NULL; k++){
                         free(task_array[i].args_prog[j][k]);
@@ -67,13 +66,6 @@ void sigchld_handler(int signo) {
                 for (int j = i; j < nr_tasks - 1; j++) {
                     task_array[j] = task_array[j + 1];
                 }
-                for(int j = 0; j<task_array[nr_tasks-1].nr_progs; j++){
-                    for(int k = 0; k<20 && task_array[nr_tasks-1].args_prog[j][k]!=NULL; k++){
-                        free(task_array[nr_tasks-1].args_prog[j][k]);
-                    }
-                }
-                free(task_array[nr_tasks-1].flag);
-                if(nr_tasks!=1) free(&task_array[nr_tasks-1]);
 
                 Task *temp2 = realloc(task_array, (nr_tasks - 1) * sizeof(Task));
                 task_array = temp2;
@@ -85,10 +77,6 @@ void sigchld_handler(int signo) {
                     task_array = NULL;
                 }
 
-                // Reduz o tamanho do array
-                //nr_tasks--;
-                //nr_tasks_executing--;
-                //current_task--;
                 break;
             }
         }
@@ -235,7 +223,6 @@ int main(int argc, char* argv[]){
                 }
                 else{
                     if(i > 3){  //  ./client execute time -u "prog-a [args]"
-                    //printf("%s   %s\n", args[0], args[2]);
                         if((strcmp(args[0], "execute") == 0)  &&  ((strcmp(args[2], "-u") == 0) || (strcmp(args[2], "-p") == 0))){
 
                             char* args_prog[20][20];   //  args_prog[número do programa][número do argumento]
@@ -259,68 +246,79 @@ int main(int argc, char* argv[]){
                             NR_P++; // incrementa o numero de programas Total
                             nr_arg = 0;
 
-                            char message[20];
-                            // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
-                            sprintf(message, "\nTASK %d Received\n\n", nr_task_received);
-                            write(server_to_client, message, strlen(message));
-                            close(server_to_client);
-
-                            struct timeval start_time;
-                            gettimeofday(&start_time, NULL);
-                            Task new_task;
-                            new_task.pid_son = 0;
-                            new_task.id_task = nr_task_received;
-                            new_task.nr_progs = NR_P;
-                            new_task.expected_time = expected_time;
-                            new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
-                            new_task.status = SCHEDULED;
-                            new_task.flag = strdup(args[2]);
-                            // Copia-se os argumentos do programa para a matriz
-                            copy_args_prog(new_task.args_prog, args_prog, NR_P);
-                            // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
-                            
-                            task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
-
-                            if(strcmp(sched_policy, "FCFS") == 0) {
-                                task_array[nr_tasks] = new_task;
-                            }
-                            else {  // SJF
-                                if(nr_tasks == 0){
-                                    task_array[0] = new_task;
+                            if(((strcmp(args[2], "-u") == 0) && NR_P > 1)  ||  ((strcmp(args[2], "-p") == 0) && NR_P < 2)){
+                                write(server_to_client, "Comando inválido\n", 18);
+                                close(server_to_client); 
+                                for(int nr_p = 0; nr_p<NR_P; nr_p++){
+                                    for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
+                                        free(args_prog[nr_p][nr_arg]);
+                                    }
                                 }
-                                else{
-                                    if(current_task == nr_tasks){
-                                        task_array[nr_tasks] = new_task;
+                            }
+                            else{
+                                char message[20];
+                                // Mensagem que vai ser recebida pelo client quando se executa uma tarefa
+                                sprintf(message, "\nTASK %d Received\n\n", nr_task_received);
+                                write(server_to_client, message, strlen(message));
+                                close(server_to_client);
+
+                                struct timeval start_time;
+                                gettimeofday(&start_time, NULL);
+                                Task new_task;
+                                new_task.pid_son = 0;
+                                new_task.id_task = nr_task_received;
+                                new_task.nr_progs = NR_P;
+                                new_task.expected_time = expected_time;
+                                new_task.time = (start_time.tv_sec * 1000) + (start_time.tv_usec / 1000);  //para obter o tempo em milissegundos em que recebeu a tarefa
+                                new_task.status = SCHEDULED;
+                                new_task.flag = strdup(args[2]);
+                                // Copia-se os argumentos do programa para a matriz
+                                copy_args_prog(new_task.args_prog, args_prog, NR_P);
+                                // Aumenta-se o espaço utilizado, sempre que o server receber uma nova tarefa
+
+                                task_array = realloc(task_array, (nr_tasks+1) * sizeof(Task));
+
+                                if(strcmp(sched_policy, "FCFS") == 0) {
+                                    task_array[nr_tasks] = new_task;
+                                }
+                                else {  // SJF
+                                    if(nr_tasks == 0){
+                                        task_array[0] = new_task;
                                     }
                                     else{
-                                        for(int i = current_task; i<=nr_tasks; i++){
-                                            if(i == nr_tasks){
-                                                task_array[nr_tasks] = new_task;
-                                                break;
-                                            }
-                                            if(new_task.expected_time < task_array[i].expected_time){
-                                                Task temp = new_task;
-                                                for(int j = i; j<nr_tasks; j++){
-                                                    Task temp2 = task_array[j];
-                                                    task_array[j] = temp;
-                                                    temp = temp2;
-                                                    if(j == nr_tasks-1) task_array[j+1] = temp;
+                                        if(current_task == nr_tasks){
+                                            task_array[nr_tasks] = new_task;
+                                        }
+                                        else{
+                                            for(int i = current_task; i<=nr_tasks; i++){
+                                                if(i == nr_tasks){
+                                                    task_array[nr_tasks] = new_task;
+                                                    break;
                                                 }
-                                                break;
+                                                if(new_task.expected_time < task_array[i].expected_time){
+                                                    Task temp = new_task;
+                                                    for(int j = i; j<nr_tasks; j++){
+                                                        Task temp2 = task_array[j];
+                                                        task_array[j] = temp;
+                                                        temp = temp2;
+                                                        if(j == nr_tasks-1) task_array[j+1] = temp;
+                                                    }
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            nr_tasks_scheduled++;
-                            nr_tasks++;
+                                nr_tasks_scheduled++;
+                                nr_tasks++;
 
-                            for(int nr_p = 0; nr_p<NR_P; nr_p++){
-                                for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
-                                    free(args_prog[nr_p][nr_arg]);
+                                for(int nr_p = 0; nr_p<NR_P; nr_p++){
+                                    for(int nr_arg = 0; nr_arg<20 && args_prog[nr_p][nr_arg]!=NULL; nr_arg++){
+                                        free(args_prog[nr_p][nr_arg]);
+                                    }
                                 }
+                                nr_task_received++;
                             }
-                            nr_task_received++;
                         }
                         else{
                             write(server_to_client, "Comando inválido\n", 18);
