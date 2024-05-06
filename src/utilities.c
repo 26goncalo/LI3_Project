@@ -15,7 +15,6 @@ void copy_args_prog(char* dest[][20], char* src[][20], int nr_p){
     int j = 0;
     for (int i = 0; i < nr_p; i++) {
         for (j = 0; src[i][j] != NULL; j++) {
-            //strcpy(dest[i][j], src[i][j]);
             dest[i][j] = strdup(src[i][j]);
         }
         dest[i][j] = NULL;

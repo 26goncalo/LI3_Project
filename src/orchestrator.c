@@ -146,7 +146,7 @@ int main(int argc, char* argv[]){
                 args[i] = NULL;
 
                 int server_to_client = open("server_to_client", O_WRONLY);            
-                if(i == 1){   // ./cliente status    ou      ./cliente end
+                if(i == 1){   // ./client status    ou      ./client end
                     if(strcmp(args[0], "status") == 0){
                         int pid = fork();
                         if(pid == -1){
@@ -431,7 +431,7 @@ int main(int argc, char* argv[]){
                                 }
                             }
                         }
-                        _exit(0);    //inútil????
+                        _exit(0);
                     }
                     else{
                         close(taskX);
